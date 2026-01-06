@@ -18,28 +18,28 @@ api.interceptors.request.use((config) => {
 });
 
 export const getNearbyRooms = (lat, lng) => {
-    return api.get(`/rooms?lat=${lat}&lng=${lng}`);
+    return api.get(`/api/rooms?lat=${lat}&lng=${lng}`);
 };
 
 export const createRoom = (data) => {
-    return api.post("/rooms", data);
+    return api.post("/api/rooms", data);
 };
 
 export const getMyActiveRoom = () => {
-    return api.get("/rooms/my-active");
+    return api.get("/api/rooms/my-active");
 };
 
 export const deleteRoom = (roomId) => {
-    return api.delete(`/rooms/${roomId}`);
+    return api.delete(`/api/rooms/${roomId}`);
 };
 
 export const updateUserLocation = (coords) => {
-    return api.patch("/users/location", coords);
+    return api.patch("/api/users/location", coords);
 };
 
 
 export const getRoomMessages = (roomId) => {
-    return api.get(`/chat/${roomId}`);
+    return api.get(`/api/chat/${roomId}`);
 };
   
   
