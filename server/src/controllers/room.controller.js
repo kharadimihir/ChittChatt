@@ -98,7 +98,7 @@ export const getNearbyRooms = async (req, res) => {
         room.location.lng
       );
 
-      return distance <= 5; // km radius
+      return distance <= 15; // km radius
     });
 
     return res.json({ rooms: nearbyRooms });
