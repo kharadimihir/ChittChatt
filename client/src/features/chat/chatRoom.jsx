@@ -90,8 +90,8 @@ const ChatRoom = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      <nav className="h-16 flex items-center justify-between px-4 bg-white/60 backdrop-blur-md border-b border-white/20">
+    <div className="min-h-screen flex flex-col">
+      <nav className="sticky top-0 z-20 h-16 flex items-center justify-between px-4 bg-white/60 backdrop-blur-xl border-b border-white/20">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -157,7 +157,7 @@ const ChatRoom = () => {
         <div ref={bottomRef} />
       </div>
 
-      <div className="p-4 bg-white/40 backdrop-blur-xl border-t border-white/20">
+      <div className="sticky bottom-0 z-20 p-4 bg-white/40 backdrop-blur-xl border-t border-white/20">
         <div className="max-w-4xl mx-auto flex items-center gap-3">
           <div className="flex-1 relative">
             <Input
@@ -183,7 +183,7 @@ const ChatRoom = () => {
             </Button>
 
             {showEmoji && (
-              <div ref={emojiRef} className="cursor-pointer absolute bottom-14 right-4 z-50">
+              <div ref={emojiRef} className="cursor-pointer absolute bottom-14 right-2 z-50 max-w-[95vw] overflow-hidden">
                 <EmojiPicker
                   onEmojiClick={(emoji) =>
                     setText((prev) => prev + emoji.emoji)

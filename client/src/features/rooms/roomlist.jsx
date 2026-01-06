@@ -156,7 +156,7 @@ const RoomList = () => {
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             {!location && (
               <Button
                 variant="outline"
