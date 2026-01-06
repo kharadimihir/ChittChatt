@@ -33,7 +33,7 @@ export default function registerChatSocket(io) {
       if (!roomUsers.has(roomId)) {
         roomUsers.set(roomId, new Set());
       }
-      roomUsers.get(roomId).add(socket.userId);
+      roomUsers.get(roomId).add(socket.id);
 
       const count = roomUsers.get(roomId).size;
       io.to(roomId).emit("active-users", count);
@@ -70,8 +70,8 @@ export default function registerChatSocket(io) {
     });
     socket.on("disconnect", () => {
         for (const [roomId, users] of roomUsers.entries()) {
-          if (users.has(socket.userId)) {
-            users.delete(socket.userId);
+          if (users.has(socket.id)) {
+            users.delete(socket.id);
   
             if (users.size === 0) {
               roomUsers.delete(roomId);
