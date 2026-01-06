@@ -1,5 +1,6 @@
 import Room from "../models/Room.model.js";
 import { getDistantInKm } from "../utils/distant.js";
+import { io } from "../server.js"
 
 export const createRoom = async (req, res) => {
   try {
@@ -129,6 +130,14 @@ export const deleteRoom = async (req, res) => {
     room.isActive = false;
     room.expiresAt = new Date(); // expire immediately
     await room.save();
+
+    io.to(roomId).emit("room-deleted", {
+      roomId,
+      message: "Room has been deleted by creator",
+    })
+
+    const sockets = await io.in(roomId).fetchSockets();
+    sockets.forEach((socket) => socket.leave(roomId));
 
     return res.status(200).json({
       message: "Room deleted successfully",

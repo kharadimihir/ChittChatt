@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { socket } from "./chatSocket";
 import { getRoomMessages } from "@/services/axios";
 import EmojiPicker from "emoji-picker-react";
+import { toast } from "sonner";
 
 const ChatRoom = () => {
   const navigate = useNavigate();
@@ -76,6 +77,26 @@ const ChatRoom = () => {
       socket.off("active-users");
     };
   }, [currentRoom?._id]);
+
+  useEffect(() => {
+    socket.on("room-deleted", ({ message }) => {
+      toast.error(message);
+      localStorage.removeItem("activeRoom");
+      navigate("/");
+    });
+  
+    socket.on("room-closed", () => {
+      toast.error("This room is no longer active");
+      localStorage.removeItem("activeRoom");
+      navigate("/");
+    });
+  
+    return () => {
+      socket.off("room-deleted");
+      socket.off("room-closed");
+    };
+  }, []);
+  
 
   const handleSendMessage = () => {
     if (!text.trim() || !currentRoom?._id) return;
