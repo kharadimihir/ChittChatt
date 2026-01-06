@@ -191,7 +191,7 @@ const ChatRoom = () => {
                 }
               }}
               placeholder="Type a message..."
-              className="h-12 rounded-full border-none bg-white shadow-inner pl-6 pr-12 focus-visible:ring-primary"
+              className="h-12 rounded-full border-none bg-white shadow-inner pl-6 pr-20 focus-visible:ring-primary"
             />
 
             <Button
