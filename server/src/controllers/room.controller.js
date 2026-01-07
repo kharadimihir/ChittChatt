@@ -1,6 +1,7 @@
 import Room from "../models/Room.model.js";
 import { getDistantInKm } from "../utils/distant.js";
 import { io } from "../server.js"
+import Message from "../models/Message.model.js";
 
 export const createRoom = async (req, res) => {
   try {
@@ -108,7 +109,6 @@ export const getNearbyRooms = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch rooms" });
   }
 };
-
 export const deleteRoom = async (req, res) => {
   try {
     const { roomId } = req.params;
@@ -120,27 +120,31 @@ export const deleteRoom = async (req, res) => {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    // Only creator can delete this room
+    // Only creator can delete
     if (room.createdBy.toString() !== userId.toString()) {
       return res
         .status(403)
         .json({ message: "Not authorized to delete this room" });
     }
 
-    room.isActive = false;
-    room.expiresAt = new Date(); // expire immediately
-    await room.save();
-
+    // Notify users BEFORE deletion
     io.to(roomId).emit("room-deleted", {
       roomId,
-      message: "Room has been deleted by creator",
-    })
+      message: "Room deleted by creator",
+    });
 
+    // Remove users from socket room
     const sockets = await io.in(roomId).fetchSockets();
     sockets.forEach((socket) => socket.leave(roomId));
 
+    // Delete all messages of the room
+    await Message.deleteMany({ roomId });
+
+    // Delete the room
+    await Room.findByIdAndDelete(roomId);
+
     return res.status(200).json({
-      message: "Room deleted successfully",
+      message: "Room and messages deleted successfully",
     });
   } catch (error) {
     console.error("Delete room error:", error);

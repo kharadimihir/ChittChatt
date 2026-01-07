@@ -148,7 +148,7 @@ const ChatRoom = () => {
             }`}
           >
             <span className="text-[10px] font-bold text-muted-foreground mb-1 ml-3 mr-3">
-              {msg.sender?.handle || "Unknown"}
+            {msg.sender?._id === user?.id ? "You" : msg.sender?.handle || "Unknown"}
             </span>
             <div
               className={`max-w-[80%] px-4 py-3 rounded-[1.5rem] shadow-sm ${
