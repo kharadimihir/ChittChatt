@@ -6,14 +6,20 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login } from "./authApi";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth.store";
 
 const Login = () => {
   const navigate = useNavigate();
+
+  const setAuth = useAuthStore((s) => s.setAuth);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+
   const handleLogin = async () => {
+
     if (!email || !password) {
       toast.error("Email and password are required");
       return;
@@ -23,17 +29,21 @@ const Login = () => {
       setLoading(true);
 
       const res = await login(email, password);
+      const { user, token } = res.data;
+
 
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
 
-      if (res.data.user.handle) {
+      setAuth({ user, token });
+
+      if (user.handle) {
         navigate("/");
       } else {
         navigate("/setup");
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || err.message);
+      toast.error(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }

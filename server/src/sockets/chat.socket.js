@@ -1,58 +1,70 @@
 import Message from "../models/Message.model.js";
 import jwt from "jsonwebtoken";
-export default function registerChatSocket(io) {
 
-  // roomId => Set of userIds
+export default function registerChatSocket(io) {
+  // roomId => Set(socketId)
   const roomUsers = new Map();
 
-  // Socket auth middleware
+  /* ---------------- AUTH MIDDLEWARE ---------------- */
   io.use((socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
-
-      if (!token) {
-        return next(new Error("Authentication error"));
-      }
+      if (!token) return next(new Error("Authentication error"));
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // attach userId to socket
       socket.userId = decoded.userId;
 
       next();
-    } catch (error) {
-      return next(new Error("Authentication error"));
+    } catch (err) {
+      next(new Error("Authentication error"));
     }
   });
 
+  /* ---------------- CONNECTION ---------------- */
   io.on("connection", (socket) => {
 
-    // Join room
-    socket.on("join-room", async (roomId) => {
+    /* ---------- JOIN ROOM ---------- */
+    socket.on("join-room", (roomId) => {
       socket.join(roomId);
+
       if (!roomUsers.has(roomId)) {
         roomUsers.set(roomId, new Set());
       }
-      roomUsers.get(roomId).add(socket.id);
 
-      const count = roomUsers.get(roomId).size;
+      const users = roomUsers.get(roomId);
+      users.add(socket.id);
+
+      const count = users.size;
+
+      // ChatRoom users
       io.to(roomId).emit("active-users", count);
-      io.emit("room-user-count", {
-        roomId,
-        count,
-      });
+
+      // RoomList cards
+      io.emit("room-user-count", { roomId, count });
     });
-    
 
-    socket.on("send-message", async (data) => {
+    /* ---------- LEAVE ROOM ---------- */
+    socket.on("leave-room", (roomId) => {
+      if (!roomUsers.has(roomId)) return;
+
+      const users = roomUsers.get(roomId);
+      users.delete(socket.id);
+
+      if (users.size === 0) {
+        roomUsers.delete(roomId);
+      }
+
+      const count = users.size || 0;
+
+      io.to(roomId).emit("active-users", count);
+      io.emit("room-user-count", { roomId, count });
+    });
+
+    /* ---------- SEND MESSAGE ---------- */
+    socket.on("send-message", async ({ roomId, text }) => {
+      if (!roomId || !text) return;
+
       try {
-        const { roomId, text } = data;
-
-        if (!roomId || !text) {
-          return;
-        }
-
-        // Save msg to db
         const message = await Message.create({
           roomId,
           sender: socket.userId,
@@ -62,31 +74,49 @@ export default function registerChatSocket(io) {
 
         await message.populate("sender", "handle");
 
-        // Broadcast to everyone
         io.to(roomId).emit("receive-message", message);
-      } catch (error) {
-        console.log("Socket send-message error:", error);
+      } catch (err) {
+        console.error("send-message error:", err);
       }
     });
-    socket.on("disconnect", () => {
-        for (const [roomId, users] of roomUsers.entries()) {
-          if (users.has(socket.id)) {
-            users.delete(socket.id);
-  
-            if (users.size === 0) {
-              roomUsers.delete(roomId);
-            }
-  
-            const count = users.size || 0;
-  
-            io.to(roomId).emit("active-users", count);
-            io.emit("room-user-count", {
-              roomId,
-              count,
-            });
-          }
-        }
 
+    /* ---------- DELETE ROOM (CREATOR) ---------- */
+    socket.on("delete-room", (roomId) => {
+      // Notify users inside room
+      io.to(roomId).emit("room-deleted", {
+        roomId,
+        message: "Room was deleted by creator",
       });
+
+      // Force everyone out of socket room
+      io.socketsLeave(roomId);
+
+      // Cleanup memory
+      roomUsers.delete(roomId);
+
+      // Update room list counts
+      io.emit("room-user-count", {
+        roomId,
+        count: 0,
+      });
+    });
+
+    /* ---------- DISCONNECT ---------- */
+    socket.on("disconnect", () => {
+      for (const [roomId, users] of roomUsers.entries()) {
+        if (users.has(socket.id)) {
+          users.delete(socket.id);
+
+          if (users.size === 0) {
+            roomUsers.delete(roomId);
+          }
+
+          const count = users.size || 0;
+
+          io.to(roomId).emit("active-users", count);
+          io.emit("room-user-count", { roomId, count });
+        }
+      }
+    });
   });
 }

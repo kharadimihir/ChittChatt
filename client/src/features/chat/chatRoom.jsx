@@ -6,98 +6,112 @@ import { useNavigate } from "react-router-dom";
 import { socket } from "./chatSocket";
 import { getRoomMessages } from "@/services/axios";
 import EmojiPicker from "emoji-picker-react";
+import { useChatStore } from "@/store/chat.store";
+import { useRoomStore } from "@/store/room.store";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth.store";
 
 const ChatRoom = () => {
   const navigate = useNavigate();
 
-  const [messages, setMessages] = useState([]);
-  const [activeUsers, setActiveUsers] = useState(0);
+  /* ---------------- Room ---------------- */
+  const currentRoom = useRoomStore((s) => s.activeRoom);
+  const clearActiveRoom = useRoomStore((s) => s.clearActiveRoom);
+
+  /* ---------------- Chat store ---------------- */
+  const messagesByRoom = useChatStore((s) => s.messagesByRoom);
+
+const messages = currentRoom?._id
+  ? messagesByRoom[currentRoom._id] || []
+  : [];
+
+  const setRoomMessages = useChatStore((s) => s.setRoomMessages);
+  const activeUsers = useChatStore((s) => s.activeUsers);
+
+  /* ---------------- Local UI state ---------------- */
   const [text, setText] = useState("");
   const [showEmoji, setShowEmoji] = useState(false);
 
-  const currentRoom = JSON.parse(localStorage.getItem("activeRoom"));
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = useAuthStore((s) => s.user);
 
   const bottomRef = useRef(null);
   const emojiRef = useRef(null);
 
+  /* ---------------- Guard ---------------- */
+  useEffect(() => {
+    if (!currentRoom) {
+      navigate("/");
+    }
+  }, [currentRoom, navigate]);
+
+  /* ---------------- Emoji outside click ---------------- */
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (emojiRef.current && !emojiRef.current.contains(e.target)) {
         setShowEmoji(false);
       }
     };
-  
+
     if (showEmoji) {
       document.addEventListener("mousedown", handleClickOutside);
     }
-  
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showEmoji]);
-  
 
-  // Auto scroll
+  /* ---------------- Auto scroll ---------------- */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Load messages
+  /* ---------------- Load messages (CACHED) ---------------- */
   useEffect(() => {
     if (!currentRoom?._id) return;
+    if (messages.length > 0) return; // cache hit
 
     const loadMessages = async () => {
       const res = await getRoomMessages(currentRoom._id);
-      setMessages(res.data.messages);
+      setRoomMessages(currentRoom._id, res.data.messages);
     };
 
     loadMessages();
-  }, [currentRoom?._id]);
+  }, [currentRoom?._id, messages.length, setRoomMessages]);
 
-  // Socket setup
+  /* ---------------- Join / Leave room ---------------- */
   useEffect(() => {
     if (!currentRoom?._id) return;
 
-    if (!socket.connected) socket.connect();
-
     socket.emit("join-room", currentRoom._id);
 
-    socket.on("active-users", setActiveUsers);
-
-    const handleReceive = (message) => {
-      setMessages((prev) => [...prev, message]);
-    };
-
-    socket.on("receive-message", handleReceive);
-
     return () => {
-      socket.off("receive-message", handleReceive);
-      socket.off("active-users");
+      socket.emit("leave-room", currentRoom._id);
     };
   }, [currentRoom?._id]);
 
   useEffect(() => {
-    socket.on("room-deleted", ({ message }) => {
-      toast.error(message);
-      localStorage.removeItem("activeRoom");
-      navigate("/");
-    });
+    const handleRoomDeleted = ({ roomId, message }) => {
+      if (roomId !== currentRoom?._id) return;
   
-    socket.on("room-closed", () => {
-      toast.error("This room is no longer active");
-      localStorage.removeItem("activeRoom");
+      toast.error(message || "Room was deleted by creator");
+  
+      clearActiveRoom();
       navigate("/");
-    });
+    };
+  
+    socket.on("room-deleted", handleRoomDeleted);
   
     return () => {
-      socket.off("room-deleted");
-      socket.off("room-closed");
+      socket.off("room-deleted", handleRoomDeleted);
     };
-  }, []);
+  }, [currentRoom?._id, clearActiveRoom, navigate]);
   
 
+  
+  
+
+  /* ---------------- Send message ---------------- */
   const handleSendMessage = () => {
     if (!text.trim() || !currentRoom?._id) return;
 
@@ -110,6 +124,8 @@ const ChatRoom = () => {
     setShowEmoji(false);
   };
 
+  if (!currentRoom) return null;
+
   return (
     <div className="min-h-screen flex flex-col">
       <nav className="sticky top-0 z-20 h-16 flex items-center justify-between px-4 bg-white/60 backdrop-blur-xl border-b border-white/20">
@@ -117,20 +133,24 @@ const ChatRoom = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/")}
+            onClick={() => {
+              clearActiveRoom();
+              navigate("/");
+            }}
             className="rounded-full"
           >
             <ChevronLeft className="w-6 h-6" />
           </Button>
           <div>
             <h2 className="font-bold text-lg leading-none">
-              {currentRoom?.title}
+              {currentRoom.title}
             </h2>
             <span className="text-[10px] font-bold text-primary uppercase tracking-tighter">
-              {currentRoom?.tag}
+              {currentRoom.tag}
             </span>
           </div>
         </div>
+
         <div className="bg-primary/10 px-3 py-1 rounded-full flex items-center gap-2">
           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
           <span className="text-xs font-bold text-primary">
@@ -148,8 +168,11 @@ const ChatRoom = () => {
             }`}
           >
             <span className="text-[10px] font-bold text-muted-foreground mb-1 ml-3 mr-3">
-            {msg.sender?._id === user?.id ? "You" : msg.sender?.handle || "Unknown"}
+              {msg.sender?._id === user?.id
+                ? "You"
+                : msg.sender?.handle || "Unknown"}
             </span>
+
             <div
               className={`max-w-[80%] px-4 py-3 rounded-[1.5rem] shadow-sm ${
                 msg.sender?._id === user?.id
@@ -160,6 +183,7 @@ const ChatRoom = () => {
               <p className="text-sm font-medium leading-relaxed">
                 {msg.text}
               </p>
+
               <span
                 className={`text-[9px] font-bold block mt-1 ${
                   msg.sender?._id === user?.id
@@ -197,14 +221,17 @@ const ChatRoom = () => {
             <Button
               size="icon"
               variant="ghost"
-              onClick={() => setShowEmoji((prev) => !prev)}
+              onClick={() => setShowEmoji((p) => !p)}
               className="absolute right-12 top-1.5"
             >
               😊
             </Button>
 
             {showEmoji && (
-              <div ref={emojiRef} className="cursor-pointer absolute bottom-14 right-2 z-50 max-w-[95vw] overflow-hidden">
+              <div
+                ref={emojiRef}
+                className="cursor-pointer absolute bottom-14 right-2 z-50 max-w-[95vw] overflow-hidden"
+              >
                 <EmojiPicker
                   onEmojiClick={(emoji) =>
                     setText((prev) => prev + emoji.emoji)

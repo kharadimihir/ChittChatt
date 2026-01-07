@@ -7,8 +7,20 @@ import ChatRoom from "./features/chat/chatRoom";
 import AuthRoute from "./components/AuthRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
 import './App.css'
+import { useSocketStore } from "./store/socket.store";
+import { useEffect } from "react";
+import { useAuthStore } from "./store/auth.store";
 
 function App() {
+
+  const hydrateAuth = useAuthStore((s) => s.hydrate);
+  const connectSocket = useSocketStore((s) => s.connect);
+
+  useEffect(() => {
+    hydrateAuth();
+    connectSocket();
+  }, [connectSocket, hydrateAuth]);
+
   return (
     <BrowserRouter>
       <Routes>

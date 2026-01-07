@@ -9,7 +9,6 @@ const api =  axios.create({
 
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem("token");
-    console.log(token);
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -29,9 +28,14 @@ export const getMyActiveRoom = () => {
     return api.get("/api/rooms/my-active");
 };
 
-export const deleteRoom = (roomId) => {
-    return api.delete(`/api/rooms/${roomId}`);
-};
+export const deleteRoom = (roomId, socketId) => {
+    return api.delete(`/api/rooms/${roomId}`, {
+      data: {
+        socketId: socketId
+      }
+    });
+  };
+  
 
 export const updateUserLocation = (coords) => {
     return api.patch("/api/users/location", coords);

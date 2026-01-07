@@ -39,6 +39,11 @@ export const createRoom = async (req, res) => {
       expiresAt,
     });
 
+    const populatedRoom = await Room.findById(room._id)
+      .populate("createdBy", "_id handle");
+
+    io.emit("room-created", { room: populatedRoom });
+
     res.status(201).json({
       message: "Room created Successfully",
       room,
@@ -53,7 +58,8 @@ export const getMyActiveRoom = async (req, res) => {
   try {
     const room = await Room.findOne({
       createdBy: req.user._id,
-      isActive: true,
+      isActive: true, 
+      expiresAt: { $gt: new Date() },
     });
 
     return res.status(201).json({
@@ -115,39 +121,38 @@ export const deleteRoom = async (req, res) => {
     const userId = req.user._id;
 
     const room = await Room.findById(roomId);
-
     if (!room) {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    // Only creator can delete
+    // only creator can delete
     if (room.createdBy.toString() !== userId.toString()) {
-      return res
-        .status(403)
-        .json({ message: "Not authorized to delete this room" });
+      return res.status(403).json({ message: "Not authorized" });
     }
 
-    // Notify users BEFORE deletion
     io.to(roomId).emit("room-deleted", {
       roomId,
-      message: "Room deleted by creator",
+      createdBy: room.createdBy.toString(),
+      message: "Room was deleted by creator",
     });
 
-    // Remove users from socket room
-    const sockets = await io.in(roomId).fetchSockets();
-    sockets.forEach((socket) => socket.leave(roomId));
 
-    // Delete all messages of the room
+    io.emit("room-removed", { roomId });
+
+    // kick all sockets from the room
+    const sockets = await io.in(roomId).fetchSockets();
+    sockets.forEach((s) => s.leave(roomId));
+
+    // delete messages
     await Message.deleteMany({ roomId });
 
-    // Delete the room
+    // delete room
     await Room.findByIdAndDelete(roomId);
 
-    return res.status(200).json({
-      message: "Room and messages deleted successfully",
-    });
-  } catch (error) {
-    console.error("Delete room error:", error);
+    res.status(200).json({ message: "Room deleted successfully" });
+  } catch (err) {
+    console.error("Delete room error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+

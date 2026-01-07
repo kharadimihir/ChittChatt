@@ -5,9 +5,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { updateHandle } from "./authApi";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth.store";
 
 const SetupPage = () => {
   const navigate = useNavigate();
+
+  const user = useAuthStore((s) => s.user);
+  const setAuth = useAuthStore((s) => s.setAuth);
 
   const [handle, setHandle] = useState("");
   const [previousHandle, setPreviousHandle] = useState("");
@@ -23,7 +27,10 @@ const SetupPage = () => {
       setLoading(true);
       const res = await updateHandle(handle);
 
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+      setAuth({
+        user: res.data.user,
+        token: useAuthStore.getState().token,
+      })
       toast.success("Handle updated successfully");
       navigate("/");
     } catch (err) {
@@ -34,11 +41,10 @@ const SetupPage = () => {
   };
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
     if (user?.handle) {
       setPreviousHandle(user.handle);
     }
-  }, []);
+  }, [user]);
   
 
   return (

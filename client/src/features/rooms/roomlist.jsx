@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,19 +14,30 @@ import {
   getMyActiveRoom,
   getNearbyRooms,
 } from "@/services/axios";
+import { socket } from "../chat/chatSocket";
+import { useRoomStore } from "@/store/room.store";
+import { useAuthStore } from "@/store/auth.store";
+import { useChatStore } from "@/store/chat.store";
+import { useSocketStore } from "@/store/socket.store";
 
 const RoomList = () => {
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const handle = user?.handle;
 
-  const [handle, setHandle] = useState("");
-  const [rooms, setRooms] = useState([]);
+  const rooms = useRoomStore((state) => state.rooms);
+  const setRooms = useRoomStore((state) => state.setRooms);
+  const removeRoom = useRoomStore((state) => state.removeRoom);
+
+  const hasActiveRoom = useRoomStore((state) => state.hasActiveRoom);
+  const setHasActiveRoom = useRoomStore((state) => state.setHasActiveRoom);
+  const setActiveRoom = useRoomStore((state) => state.setActiveRoom);
+
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [hasActiveRoom, setHasActiveRoom] = useState(false);
 
   const { location, loading: locationLoading, getLocation } = useLocation();
 
-  const user = JSON.parse(localStorage.getItem("user"));
 
   // Prevent create room without location
   const handleCreateRoomClick = () => {
@@ -42,26 +54,49 @@ const RoomList = () => {
     setIsCreateOpen(true);
   };
 
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    return () => {};
+  }, []);
+
   const handleDeleteRoom = (roomId) => {
     toast.warning("Delete this room?", {
       action: {
         label: "Delete",
         onClick: async () => {
-          await deleteRoom(roomId);
-          setRooms((prev) => prev.filter((r) => r._id !== roomId));
-          setHasActiveRoom(false);
+          await deleteRoom(roomId, socket.id);
+          useRoomStore.getState().removeRoom(roomId);
+          useRoomStore.getState().clearActiveRoom();
           toast.success("Room deleted");
         },
       },
     });
   };
 
-  // Load handle
   useEffect(() => {
-    if (user?.handle) {
-      setHandle(user.handle);
-    }
-  }, []);
+    const handleRoomDeleted = ({ roomId, createdBy, message }) => {
+
+      // remove room from list for everyone
+      removeRoom(roomId);
+
+      // creator → no error toast
+      if (createdBy === user?.id) {
+        return;
+      }
+
+      // everyone else → show error toast
+      toast.error(message || "Room was deleted by creator");
+    };
+
+    socket.on("room-deleted", handleRoomDeleted);
+
+    return () => {
+      socket.off("room-deleted", handleRoomDeleted);
+    };
+  }, [removeRoom]);
 
   // Check if user already has an active room
   useEffect(() => {
@@ -70,11 +105,11 @@ const RoomList = () => {
         const res = await getMyActiveRoom();
         setHasActiveRoom(res.data.hasActiveRoom);
       } catch {
-        // silent fail
+        setHasActiveRoom(false);
       }
     };
     checkActiveRoom();
-  }, []);
+  }, [setHasActiveRoom]);
 
   // Fetch nearby rooms
   useEffect(() => {
@@ -93,17 +128,33 @@ const RoomList = () => {
     };
 
     fetchRooms();
-  }, [location]);
+  }, [location, setRooms]);
+
+  useEffect(() => {
+    const handleRoomUserCount = ({ roomId, count }) => {
+      useRoomStore.getState().updateRoomUserCount(roomId, count);
+    };
+
+    socket.on("room-user-count", handleRoomUserCount);
+
+    return () => {
+      socket.off("room-user-count", handleRoomUserCount);
+    };
+  }, []);
 
   const handleJoinRoom = (room) => {
-    localStorage.setItem("activeRoom", JSON.stringify(room));
+    setActiveRoom(room);
     navigate("/chat");
   };
 
   const handleLogOut = () => {
+    useAuthStore.getState().clearAuth();
+    useRoomStore.getState().clearActiveRoom();
+    useChatStore.getState().clearChat();
+    useSocketStore.getState().disconnect();
     localStorage.clear();
     navigate("/login");
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -120,7 +171,7 @@ const RoomList = () => {
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex flex-col items-end">
             <span className="text-xs font-medium text-muted-foreground">
-              Current Handle
+              You
             </span>
             <span className="text-sm font-bold text-primary">{handle}</span>
           </div>
@@ -221,7 +272,7 @@ const RoomList = () => {
                     ))}
 
                     <div className="w-8 h-8 rounded-full border-2 border-white bg-muted flex items-center justify-center text-[10px] font-bold">
-                      {room.users ? `+${room.users}` : "+0"}
+                      +{room.userCount ?? 0}
                     </div>
                   </div>
 
@@ -266,9 +317,6 @@ const RoomList = () => {
 
             toast.success("Room created");
             setHasActiveRoom(true);
-
-            const res = await getNearbyRooms(location.lat, location.lng);
-            setRooms(res.data.rooms);
           } catch {
             toast.error("Failed to create room");
           }
