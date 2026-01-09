@@ -30,7 +30,7 @@ const SetupPage = () => {
       setAuth({
         user: res.data.user,
         token: useAuthStore.getState().token,
-      })
+      });
       toast.success("Handle updated successfully");
       navigate("/");
     } catch (err) {
@@ -45,7 +45,6 @@ const SetupPage = () => {
       setPreviousHandle(user.handle);
     }
   }, [user]);
-  
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4 text-center">
@@ -65,8 +64,9 @@ const SetupPage = () => {
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           placeholder={previousHandle || "AnonymousHandle"}
-          className="text-center text-xl h-14 rounded-2xl border-none bg-white/80 shadow-inner"
+          className="text-center text-xl h-14 rounded-2xl border-none bg-white/80 shadow-inner  placeholder:text-gray-400 placeholder:italic placeholder:opacity-70"
         />
+
         <Button
           onClick={submitHandle}
           disabled={loading}
