@@ -64,7 +64,7 @@ const SetupPage = () => {
           value={handle}
           onChange={(e) => setHandle(e.target.value)}
           placeholder={previousHandle || "AnonymousHandle"}
-          className="text-center text-xl h-14 rounded-2xl border-none bg-white/80 shadow-inner  placeholder:text-gray-400 placeholder:italic placeholder:opacity-70"
+          className="text-center text-xl h-14 rounded-2xl border-none bg-white/80 shadow-inner  placeholder:text-gray-400 placeholder:opacity-70"
         />
 
         <Button
